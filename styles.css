@@ -1,0 +1,1196 @@
+/* ================================================================
+   NJ FLOOD RISK — COUNTY FACT SHEET
+   Light / print-friendly theme
+   RBD Brand Colors
+   ================================================================ */
+
+/* ── RESET & BASE ───────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+@font-face {
+  font-family: 'RBD Bold Outlined';
+  src: url('https://rebuildbydesign.github.io/nj-flood-risk/RBDBoldOutlined.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --bg: #ffffff;
+  --surface: #f5f6f8;
+  --surface-alt: #ebedf2;
+  --border: #d4d8e0;
+  --border-light: #e8eaef;
+  --text: #000000;
+  --text-mid: #3d4560;
+  --text-muted: #6b7590;
+  --text-dim: #96a0b4;
+
+  /* RBD Brand — Risk spectrum (warm) */
+  --crisis: #dd4000;
+  --crisis-bg: #fde8de;
+  --emigrating: #f27407;
+  --emigrating-bg: #fef0df;
+  --destination: #f2a007;
+  --destination-bg: #fef6e0;
+  --stable: #f7c320;
+  --stable-bg: #fefae6;
+
+  /* Floodplain blues */
+  --flood-2025: #1ea2db;
+  --flood-2050: #005ba9;
+
+  /* Neutral accents */
+  --navy: #000000;
+  --purple: #6a3ea1;
+  --purple-bg: #f0e8fa;
+  --teal: #0e6e7a;
+  --dem: #2166ac;
+  --rep: #b2182b;
+  --radius: 4px;
+}
+
+html { font-size: 15px; }
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  background: #e9ecf0;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+/* ── APP SHELL ──────────────────────────────────────────────── */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ── SELECTOR BAR ──────────────────────────────────────────── */
+.selector-bar {
+  background:
+    linear-gradient(135deg, rgba(221, 64, 0, 0.14), rgba(0, 91, 169, 0.16)),
+    var(--navy);
+  color: #fff;
+  padding: 18px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 3px solid var(--emigrating);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+.selector-left {
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.selector-copy {
+  min-width: 0;
+}
+
+.selector-copy h1 {
+  font-size: 1.55rem;
+  line-height: 1.05;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.selector-copy p {
+  font-size: 0.95rem;
+  line-height: 1.35;
+  color: rgba(255,255,255,0.82);
+  max-width: 42rem;
+}
+
+.selector-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.selector-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.7);
+}
+
+.county-select,
+.city-select {
+  background: #fff;
+  border: 1px solid rgba(255,255,255,0.3);
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  min-width: 240px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+}
+.county-select option,
+.city-select option { color: var(--text); background: #fff; }
+
+/* ── Typeahead municipality search ───────────────────────────── */
+.muni-search { position: relative; }
+.city-select::placeholder { color: rgba(0,0,0,0.4); font-weight: 400; }
+.muni-search-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  max-height: 320px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+}
+.muni-search-option {
+  padding: 9px 12px;
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: var(--text);
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.muni-search-option.is-active,
+.muni-search-option:hover { background: rgba(0, 0, 0, 0.06); }
+.muni-search-option mark { background: rgba(216, 90, 48, 0.22); color: inherit; font-weight: 700; padding: 0 1px; border-radius: 2px; }
+.muni-search-empty { padding: 10px 12px; font-size: 0.88rem; color: rgba(0,0,0,0.45); }
+
+.btn-export {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--emigrating);
+  color: #000;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  border: none;
+  padding: 8px 18px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: background 0.15s;
+}
+.btn-export:hover { background: var(--destination); }
+.btn-export:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-export svg { width: 14px; height: 14px; }
+
+.export-btns {
+  display: flex;
+  gap: 8px;
+}
+
+/* ── FACT SHEET CONTAINER ──────────────────────────────────── */
+.fact-sheet-wrap {
+  max-width: 960px;
+  margin: 24px auto;
+  padding: 0 16px;
+  width: 100%;
+}
+
+.fact-sheet {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* ── HEADER ─────────────────────────────────────────────────── */
+.fs-header {
+  background: var(--navy);
+  color: #fff;
+  padding: 26px 28px 22px;
+  position: relative;
+  overflow: hidden;
+}
+.fs-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--crisis), var(--emigrating), var(--destination), var(--stable));
+}
+
+.fs-header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.fs-logo {
+  height: 49px;
+  width: auto;
+  opacity: 0.9;
+}
+
+.fs-header-banner {
+  height: 78px;
+  width: auto;
+  max-width: 461px;
+  object-fit: contain;
+}
+
+.fs-county-name {
+  font-size: 1.82rem;
+  font-weight: 800;
+  line-height: 1.15;
+  margin-bottom: 2px;
+}
+
+.fs-subtitle {
+  font-size: 0.86rem;
+  color: rgb(255, 255, 255);
+  font-weight: 500;
+}
+
+/* ── SECTION TITLES ─────────────────────────────────────────── */
+.section-title {
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #fff;
+  padding: 12px 24px 8px;
+  border-bottom: 1px solid #000;
+  background: #000;
+}
+
+/* ── KEY METRICS STRIP ──────────────────────────────────────── */
+.metrics-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-bottom: 1px solid var(--border);
+}
+
+.metric-cell {
+  padding: 14px 14px;
+  border-right: 1px solid var(--border-light);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 140px;
+}
+.metric-cell:last-child { border-right: none; }
+
+.metric-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+
+.metric-value {
+  font-size: 2.55rem;
+  font-family: 'RBD Bold Outlined', Arial, Helvetica, sans-serif;
+  font-weight: normal;
+  line-height: 0.88;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.8rem;
+  letter-spacing: 0.01em;
+  text-rendering: geometricPrecision;
+  text-shadow:
+    0.35px 0 currentColor,
+    -0.35px 0 currentColor,
+    0 0.35px currentColor,
+    0 -0.35px currentColor;
+}
+.metric-value.crisis { color: var(--crisis); }
+.metric-value.emigrating { color: var(--emigrating); }
+.metric-value.destination { color: var(--destination); }
+.metric-value.stable { color: var(--stable); }
+.metric-value.flood25 { color: var(--flood-2025); }
+.metric-value.flood50 { color: var(--flood-2050); }
+.metric-value.teal { color: var(--teal); }
+.metric-value.purple { color: var(--purple); }
+
+.metric-sub {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-top: 10px;
+}
+
+/* ── FLOOD RISK SECTION ─────────────────────────────────────── */
+.risk-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-bottom: 1px solid var(--border);
+}
+
+.risk-grid.risk-grid-3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.risk-grid-3 .risk-card { border-right: 1px solid var(--border-light); border-top: none; }
+.risk-grid-3 .risk-card:last-child { border-right: none; }
+
+.risk-card {
+  padding: 16px 20px;
+  border-right: 1px solid var(--border-light);
+}
+.risk-card:nth-child(even) { border-right: none; }
+.risk-card:nth-child(n+3) { border-top: 1px solid var(--border-light); }
+
+.risk-card-title {
+  font-size: 0.73rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.risk-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.risk-year-label {
+  font-size: 0.73rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  width: 36px;
+  flex-shrink: 0;
+}
+.risk-year-label.y2024 { color: var(--flood-2025); }
+.risk-year-label.y2050 { color: var(--flood-2050); }
+
+.risk-bar-track {
+  flex: 1;
+  height: 6px;
+  background: var(--surface-alt);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.risk-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s ease;
+}
+.risk-bar-fill.y2024 { background: var(--flood-2025); }
+.risk-bar-fill.y2050 { background: var(--flood-2050); }
+
+.risk-value {
+  font-size: 0.9rem;
+  font-weight: 700;
+  min-width: 70px;
+  text-align: right;
+}
+.risk-value.y2024 { color: var(--flood-2025); }
+.risk-value.y2050 { color: var(--flood-2050); }
+
+/* ── DISPLACEMENT SECTION ───────────────────────────────────── */
+.insights-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-bottom: 1px solid var(--border);
+}
+
+.displacement-panel {
+  background: var(--bg);
+  color: var(--text);
+  padding: 16px 20px 18px;
+  border-right: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.displacement-total {
+  font-size: 1.4rem;
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.insight-kicker {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--flood-2050);
+  margin-bottom: 14px;
+}
+
+.displacement-note {
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  font-style: italic;
+}
+
+.displacement-callout {
+  margin-top: 4px;
+  margin-bottom: 14px;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--text-mid);
+}
+
+.displacement-callout strong {
+  color: var(--crisis);
+}
+
+.infrastructure-callout {
+  margin-top: 4px;
+  margin-bottom: 14px;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.infra-num {
+  font-weight: 800;
+}
+
+.infra-num.y2024 { color: var(--flood-2025); }
+.infra-num.y2050 { color: var(--flood-2050); }
+
+.displacement-bar {
+  display: flex;
+  height: 18px;
+  overflow: hidden;
+  margin-bottom: 18px;
+  box-shadow: inset 0 0 0 1px var(--border-light);
+}
+
+.displacement-bar-segment {
+  height: 100%;
+}
+
+.displacement-bar-segment.crisis { background: var(--crisis); }
+.displacement-bar-segment.emigrating { background: var(--emigrating); }
+.displacement-bar-segment.destination { background: var(--destination); }
+.displacement-bar-segment.stable { background: #ffcb2f; }
+
+.displacement-table {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px 16px;
+  align-items: center;
+}
+
+.disp-head {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding-bottom: 4px;
+}
+
+.disp-head.count,
+.disp-head.pct,
+.disp-row-value {
+  text-align: right;
+}
+
+.disp-row-label,
+.disp-row-value {
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.disp-row-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: inherit;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.disp-swatch {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.disp-swatch.crisis,
+.disp-row-label.crisis,
+.disp-row-value.crisis { color: var(--crisis); background-color: var(--crisis); }
+
+.disp-swatch.emigrating,
+.disp-row-label.emigrating,
+.disp-row-value.emigrating { color: var(--emigrating); background-color: var(--emigrating); }
+
+.disp-swatch.destination,
+.disp-row-label.destination,
+.disp-row-value.destination { color: var(--destination); background-color: var(--destination); }
+
+.disp-swatch.stable,
+.disp-row-label.stable,
+.disp-row-value.stable { color: #ffcb2f; background-color: #ffcb2f; }
+
+.disp-row-label.crisis,
+.disp-row-label.emigrating,
+.disp-row-label.destination,
+.disp-row-label.stable {
+  background-color: transparent;
+}
+
+.disp-row-value.crisis,
+.disp-row-value.emigrating,
+.disp-row-value.destination,
+.disp-row-value.stable {
+  background-color: transparent;
+}
+
+.blue-acres-panel {
+  background: var(--bg);
+  padding: 16px 20px 18px;
+}
+
+.blue-acres-kicker {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #439287;
+  margin-bottom: 14px;
+}
+
+.blue-acres-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.blue-acres-stat {
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  padding: 14px 12px;
+  border-radius: var(--radius);
+}
+
+.blue-acres-value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  line-height: 1.1;
+  color: #439287;
+  margin-bottom: 4px;
+}
+
+.blue-acres-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.blue-acres-note {
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--text-mid);
+  border-left: 3px solid #439287;
+  padding-left: 12px;
+}
+
+.blue-acres-note strong {
+  color: #439287;
+}
+
+.blue-acres-detail {
+  margin-top: 12px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.risk-card-embedded {
+  margin-top: 12px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+/* ── ASSET TABLE ────────────────────────────────────────────── */
+.asset-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+}
+.asset-col {
+  overflow-x: auto;
+}
+.asset-col:first-child {
+  border-right: 1px solid var(--border-light);
+  border-bottom: none;
+}
+
+.asset-table-wrap {
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.asset-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.asset-tbl thead th {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 10px 6px;
+  text-align: right;
+  border-bottom: 2px solid var(--border);
+  background: var(--surface);
+  white-space: nowrap;
+}
+.asset-tbl thead th:first-child { text-align: left; padding-left: 16px; }
+.asset-tbl thead th:last-child { padding-right: 16px; }
+
+.asset-tbl tbody td {
+  padding: 10px 6px;
+  text-align: right;
+  border-bottom: 1px solid var(--border-light);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.asset-tbl tbody td:first-child {
+  text-align: left;
+  padding-left: 16px;
+  font-weight: 600;
+  white-space: normal;
+}
+.asset-tbl tbody td:last-child {
+  padding-right: 16px;
+}
+.asset-num {
+  font-size: 0.8rem;
+}
+
+.asset-tbl tbody tr:hover { background: var(--surface); }
+
+.asset-total-row {
+  border-top: 2px solid var(--border);
+}
+.asset-total-row td {
+  background: var(--surface);
+}
+
+.tbl-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tbl-bar-track {
+  width: 48px;
+  height: 5px;
+  background: var(--surface-alt);
+  border-radius: 3px;
+  overflow: hidden;
+  display: inline-block;
+  vertical-align: middle;
+}
+.tbl-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  display: block;
+}
+.tbl-bar-fill.y2025 { background: var(--flood-2025); }
+.tbl-bar-fill.y2050 { background: var(--flood-2050); }
+
+.tbl-pct { font-weight: 700; }
+.tbl-pct.y2025 { color: var(--flood-2025); }
+.tbl-pct.y2050 { color: var(--flood-2050); }
+
+.tbl-count {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+.growth-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.growth-badge.high { background: var(--crisis-bg); color: var(--crisis); }
+.growth-badge.med { background: var(--emigrating-bg); color: var(--emigrating); }
+.growth-badge.low { background: var(--destination-bg); color: var(--destination); }
+
+/* ── LEGISLATIVE REPS ───────────────────────────────────────── */
+.reps-section {
+  border-bottom: 1px solid var(--border);
+}
+
+.reps-group-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 12px 24px 4px;
+}
+
+.reps-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 6px 24px 14px;
+}
+
+.rep-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  padding: 7px 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.rep-chip .party-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.rep-chip .party-dot.dem { background: var(--dem); }
+.rep-chip .party-dot.rep { background: var(--rep); }
+
+.rep-chip .district-tag {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  letter-spacing: 0.04em;
+}
+
+/* ── FOOTER ─────────────────────────────────────────────────── */
+.fs-footer {
+  background: var(--navy);
+  color: #fff;
+  padding: 18px 24px;
+  display: grid;
+  grid-template-columns: 7fr 3fr;
+  gap: 16px;
+  position: relative;
+}
+.fs-footer::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--crisis), var(--emigrating), var(--destination), var(--stable));
+}
+
+.fs-footer-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--stable);
+  margin-bottom: 3px;
+}
+
+.fs-footer-logo {
+  height: 26px;
+  width: auto;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.fs-footer p {
+  font-size: 0.75rem;
+  color: #fff;
+  line-height: 1.55;
+  margin-top: 5px;
+}
+
+.fs-footer-list {
+  margin: 5px 0 0;
+  padding-left: 18px;
+  color: #fff;
+}
+
+.fs-footer-list li {
+  font-size: 0.75rem;
+  line-height: 1.55;
+}
+
+.fs-footer-list li + li {
+  margin-top: 5px;
+}
+
+.fs-footer a {
+  color: #f27407;
+  text-decoration: none;
+}
+
+.fs-footer strong {
+  color: #fff;
+}
+
+/* ── MAP + BOND ACT SECTION ─────────────────────────────────── */
+.map-bond-section {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  border-bottom: 1px solid var(--border);
+  min-height: 0;
+}
+
+.county-map-wrap {
+  border-right: 1px solid var(--border-light);
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.county-map-wrap svg {
+  width: 165%;
+  height: 165%;
+  max-height: none;
+  flex-shrink: 0;
+}
+
+.county-map-wrap svg .nj-county {
+  fill: var(--surface-alt);
+  stroke: var(--border);
+  stroke-width: 0.5;
+}
+
+.county-map-wrap svg .nj-county.active {
+  fill: var(--crisis);
+  stroke: #000;
+  stroke-width: 1;
+}
+
+.bond-act-callout {
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.bond-act-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.bond-act-tag {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--crisis);
+  padding: 3px 8px;
+  border-radius: 2px;
+}
+
+.bond-act-title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.bond-stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.bond-stat {
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  text-align: center;
+}
+
+.bond-stat-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 2px;
+}
+
+.bond-stat-value {
+  font-size: 1.05rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.bond-stat-value.crisis { color: var(--crisis); }
+.bond-stat-value.emigrating { color: var(--emigrating); }
+.bond-stat-value.flood50 { color: var(--flood-2050); }
+
+.bond-stat-sub {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  margin-top: 1px;
+}
+
+.bond-message {
+  font-size: 0.9rem;
+  color: var(--text-mid);
+  line-height: 1.55;
+  border-left: 3px solid var(--crisis);
+  padding-left: 12px;
+}
+
+.bond-message strong { color: var(--text); }
+.bond-message .citation-link {
+  color: var(--emigrating);
+  text-decoration: none;
+}
+
+.bond-message .citation-link:hover,
+.bond-message .citation-link:focus-visible {
+  color: var(--emigrating);
+  text-decoration: underline;
+}
+
+.bond-message-list {
+  margin: 0;
+  padding-left: 1rem;
+}
+
+.bond-message-list li + li {
+  margin-top: 0.35rem;
+}
+
+/* ── PDF EXPORT OVERRIDES ───────────────────────────────────── */
+@media print {
+  body { background: #fff; }
+  .selector-bar { display: none !important; }
+  .fact-sheet-wrap { margin: 0 auto; padding: 0; max-width: 800px; }
+  .fact-sheet {
+    border: none;
+    border-radius: 0;
+  }
+  .county-map-wrap {
+    padding: 10px;
+    overflow: hidden;
+  }
+  .county-map-wrap svg {
+    width: 100%;
+    height: auto;
+    max-width: 100%;
+    max-height: 210px;
+  }
+}
+
+body.exporting-pdf {
+  background: #fff;
+}
+
+body.exporting-pdf .selector-bar {
+  display: none !important;
+}
+
+body.exporting-pdf .fact-sheet-wrap {
+  margin: 0 auto;
+  padding: 0;
+  max-width: 960px;
+}
+
+body.exporting-pdf .fact-sheet {
+  margin: 0 auto;
+  border: none;
+  border-radius: 0;
+}
+
+body.exporting-pdf .county-map-wrap {
+  padding: 10px;
+  overflow: hidden;
+}
+
+body.exporting-pdf .county-map-wrap svg {
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  max-height: 210px;
+}
+
+/* ── LOADING / EMPTY STATES ─────────────────────────────────── */
+.empty-state {
+  text-align: center;
+  padding: 72px 24px;
+  color: var(--text-muted);
+  background:
+    radial-gradient(circle at top left, rgba(30, 162, 219, 0.12), transparent 34%),
+    radial-gradient(circle at top right, rgba(221, 64, 0, 0.1), transparent 30%),
+    #fff;
+}
+.empty-state h2 {
+  font-size: 1.5rem;
+  margin-bottom: 10px;
+  color: var(--text-mid);
+}
+.empty-state p {
+  font-size: 1rem;
+  max-width: 42rem;
+  margin: 0 auto;
+}
+
+/* ── SVI GAUGE ─────────────────────────────────────────────── */
+.svi-gauge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 4px;
+}
+.svi-track {
+  width: 48px;
+  height: 5px;
+  background: var(--surface-alt);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.svi-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--purple);
+}
+
+/* ── FOOTNOTE ──────────────────────────────────────────────── */
+.fs-footnote {
+  background: var(--surface);
+  border-top: 1px solid var(--border-light);
+  padding: 10px 24px 12px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+.fs-footnote strong {
+  color: var(--text-mid);
+  font-weight: 700;
+}
+
+/* ── RESPONSIVE ─────────────────────────────────────────────── */
+@media (max-width: 700px) {
+  .metrics-strip { grid-template-columns: repeat(3, 1fr); }
+  .risk-grid, .risk-grid.risk-grid-3 { grid-template-columns: 1fr; }
+  .insights-split { grid-template-columns: 1fr; }
+  .asset-two-col { grid-template-columns: 1fr; }
+  .asset-col:first-child { border-right: none; border-bottom: 1px solid var(--border-light); }
+  .displacement-panel { border-right: none; border-bottom: 1px solid var(--border-light); }
+  .displacement-table { grid-template-columns: minmax(0, 1fr) auto; }
+  .disp-head.pct,
+  .disp-row-value.pct { display: none; }
+  .blue-acres-stats { grid-template-columns: 1fr; }
+  .fs-footer { grid-template-columns: 1fr; }
+  .selector-bar { flex-direction: column; align-items: stretch; gap: 14px; padding: 16px; }
+  .selector-left { flex-direction: column; gap: 12px; }
+  .selector-copy h1 { font-size: 1.28rem; }
+  .selector-copy p { font-size: 0.9rem; }
+  .selector-actions { width: 100%; }
+  .county-select,
+  .city-select { width: 100%; min-width: 0; }
+  .btn-export { width: 100%; justify-content: center; }
+}
+
+/* Make the flood risk section full width */
+.risk-grid-full {
+  display: block; /* not grid/3-column */
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+/* Keep the risk-card styling */
+.risk-card {
+  background: #f9f9f9;
+  padding: 1rem;
+  border-radius: 0.5rem;
+}
+
+/* Risk rows stretch full width */
+.risk-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.risk-year-label {
+  width: 50px; /* adjust for spacing */
+  font-weight: bold;
+}
+
+.risk-bar-track {
+  flex-grow: 1;
+  height: 12px;
+  background: #ddd;
+  margin: 0 0.5rem;
+  border-radius: 6px;
+}
+
+.risk-bar-fill {
+  height: 100%;
+  background: #0072ce; /* example color */
+  border-radius: 6px;
+}
+
+.risk-value {
+  width: 70px;
+  text-align: right;
+  font-weight: 500;
+}
+.metrics-strip {
+  display: flex;
+  width: 100%;
+}
+
+.metric-cell {
+  flex: 1;                    /* ✅ ALL FOUR GET EQUAL WIDTH */
+  text-align: center;         /* ✅ center text inside */
+  padding: 10px 15px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;    /* ✅ vertical centering */
+  align-items: center;        /* ✅ horizontal centering */
+  box-sizing: border-box;
+}

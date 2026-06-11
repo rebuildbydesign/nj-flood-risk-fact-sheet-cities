@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NJ Flood Risk — City Fact Sheets</title>
+  <link rel="stylesheet" href="styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- ── SELECTOR BAR ──────────────────────────────────── -->
+  <nav class="selector-bar">
+    <div class="selector-left">
+      <div class="selector-copy">
+        <h1>New Jersey City Flood Risk Fact Sheets</h1>
+        <p>Explore city-by-city flood risk to people, public infrastructure, and the local economy.</p>
+      </div>
+    </div>
+    <div class="selector-actions">
+      <label class="selector-label" for="city-select">Search a municipality</label>
+      <div class="muni-search" id="muni-search">
+        <input type="text" class="city-select" id="city-select" autocomplete="off"
+               placeholder="Type a town, e.g. Metuchen…"
+               role="combobox" aria-autocomplete="list" aria-expanded="false"
+               aria-controls="city-search-list">
+        <ul class="muni-search-list" id="city-search-list" role="listbox" hidden></ul>
+      </div>
+    </div>
+    <button class="btn-export" id="btn-export" onclick="exportPDF()" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export PDF
+    </button>
+  </nav>
+
+  <!-- ── FACT SHEET ────────────────────────────────────── -->
+  <div class="fact-sheet-wrap">
+    <div id="fact-sheet-container">
+      <div class="empty-state">
+        <h2>City-Level Flood Risk, Ready to Explore</h2>
+        <p>Select a city above to view flood exposure, population impacts, public asset risk, and disaster recovery trends.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="scripts.js"></script>
+</body>
+</html>

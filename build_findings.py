@@ -1,0 +1,276 @@
+#!/usr/bin/env python3
+"""
+NJ Underwater - All-City Fact Sheet findings builder
+=====================================================
+Reproduces the manually-built nj-city-findings.csv for ALL ~547 NJ municipalities,
+computed directly from the GIS asset export plus county-level FEMA/Atlas data and
+Blue Acres buyout parcels.
+
+Inputs (all under nj-flood-risk-city/data unless noted):
+  - gis-export-key-findings.csv   asset-level rows: PUBLIC_ASSET, MUNCIPALITY, COUNTY, 2025_FLOOD, 2050 FLOOD
+  - all-nj-cities.csv             per-city population, outreach tier, priority rank (547 unique munis)
+  - blueacres_centroids.geojson   Blue Acres buyout parcels (MUNICIPALI property)
+  - boundary.json                 statewide municipal boundaries -> authoritative MUN -> COUNTY
+  - NJ_FEMA_County.geojson  (repo root)   Atlas of Disaster county-level: disaster count, FEMA $, per-capita, SVI
+
+Output:
+  - nj-city-findings.csv          one row per municipality, app-ready schema
+
+Note on duplicate names: NJ has several townships sharing a name across counties
+(e.g. multiple "Washington Twp"). The existing all-nj-cities.csv merges these by
+name, so this script does the same to stay consistent with the existing rankings.
+"""
+import json, csv, os, sys
+
+BASE = sys.argv[1] if len(sys.argv) > 1 else "."
+DATA = os.path.join(BASE, "nj-flood-risk-city", "data")
+FEMA_GEO = os.path.join(BASE, "NJ_FEMA_County.geojson")
+OUT = sys.argv[2] if len(sys.argv) > 2 else "nj-city-findings.csv"
+
+# PUBLIC_ASSET value -> (output column prefix)
+ASSET_TYPES = [
+    ("AIRPORT", "Infra_Airports"),
+    ("HOSPITAL", "Infra_Hospitals"),
+    ("KNOWN CONTAMINATED SITE", "Infra_Contaminated_Sites"),
+    ("LIBRARY", "Infra_Libraries"),
+    ("PARK", "Infra_Parks"),
+    ("POWERPLANT", "Infra_Power_Plants"),
+    ("SCHOOL", "Infra_Schools"),
+    ("SOLID & HAZARDOUS WASTE SITE", "Infra_Hazardous_Waste"),
+    ("SOLID WASTE LANDFILL", "Infra_Landfills"),
+    ("SUPERFUND", "Infra_Superfund_Sites"),
+    ("WASTEWATER TREATMENT", "Infra_Wastewater_Treatment"),
+    ("POLICE STATION", "Infra_Police_Stations"),
+    ("FIRE DEPARTMENT", "Infra_Fire_Departments"),
+]
+# friendly singular label for narrative facts
+ASSET_LABEL = {
+    "Infra_Airports": "airport",
+    "Infra_Hospitals": "hospital",
+    "Infra_Contaminated_Sites": "contaminated site",
+    "Infra_Libraries": "library",
+    "Infra_Parks": "park",
+    "Infra_Power_Plants": "power plant",
+    "Infra_Schools": "school",
+    "Infra_Hazardous_Waste": "solid & hazardous waste site",
+    "Infra_Landfills": "landfill",
+    "Infra_Superfund_Sites": "Superfund site",
+    "Infra_Wastewater_Treatment": "wastewater treatment center",
+    "Infra_Police_Stations": "police station",
+    "Infra_Fire_Departments": "fire department",
+}
+
+def norm(s):
+    return str(s or "").upper().strip()
+
+def titlecase_mun(mun):
+    """NEWARK CITY -> Newark City ; expand common type suffixes nicely."""
+    repl = {"TWP": "Township", "BORO": "Borough", "VLG": "Village"}
+    words = []
+    for w in mun.split():
+        wu = w.upper()
+        if wu in repl:
+            words.append(repl[wu])
+        elif "-" in w:
+            words.append("-".join(p.capitalize() for p in w.split("-")))
+        else:
+            words.append(w.capitalize())
+    return " ".join(words)
+
+def pct(n, d):
+    return f"{(100.0*n/d):.2f}%" if d else "0.00%"
+
+# ---- load GIS asset export ----
+assets = {}   # MUN -> { prefix: [total, f25, f50] }, plus '_all'
+county_votes = {}  # MUN -> {county: count}  (pick dominant county)
+type_lookup = {a[0]: a[1] for a in ASSET_TYPES}
+with open(os.path.join(DATA, "gis-export-key-findings.csv"), newline="", encoding="utf-8-sig") as f:
+    for r in csv.DictReader(f):
+        mun = norm(r.get("MUNCIPALITY"))
+        if not mun:
+            continue
+        ptype = norm(r.get("PUBLIC_ASSET"))
+        prefix = type_lookup.get(ptype)
+        f25 = 1 if str(r.get("2025_FLOOD", "")).strip() in ("1", "1.0") else 0
+        f50 = 1 if str(r.get("2050 FLOOD", "")).strip() in ("1", "1.0") else 0
+        d = assets.setdefault(mun, {})
+        cell = d.setdefault(prefix or "_other", [0, 0, 0])
+        cell[0] += 1; cell[1] += f25; cell[2] += f50
+        allc = d.setdefault("_all", [0, 0, 0])
+        allc[0] += 1; allc[1] += f25; allc[2] += f50
+        cnty = norm(r.get("COUNTY"))
+        if cnty:
+            county_votes.setdefault(mun, {}).setdefault(cnty, 0)
+            county_votes[mun][cnty] += 1
+
+# ---- authoritative MUN -> COUNTY from boundary.json (fallback) ----
+mun_county = {}
+with open(os.path.join(DATA, "boundary.json"), encoding="utf-8") as f:
+    bd = json.load(f)
+for feat in bd["features"]:
+    p = feat["properties"]
+    m = norm(p.get("MUN"))
+    c = norm(p.get("COUNTY"))
+    if m and c:
+        mun_county.setdefault(m, c)
+
+def county_for(mun):
+    # prefer dominant county among that muni's assets, else boundary file
+    if mun in county_votes:
+        return max(county_votes[mun].items(), key=lambda kv: kv[1])[0]
+    return mun_county.get(mun, "")
+
+# ---- county-level FEMA / Atlas of Disaster ----
+county_fema = {}  # COUNTY (upper) -> dict
+with open(FEMA_GEO, encoding="utf-8") as f:
+    fg = json.load(f)
+for feat in fg["features"]:
+    p = feat["properties"]
+    cn = norm(p.get("COUNTY_NAM"))
+    county_fema[cn] = {
+        "disasters": p.get("COUNTY_DISASTER_COUNT", ""),
+        "total_fema": p.get("COUNTY_TOTAL_FEMA", ""),
+        "per_capita": p.get("COUNTY_PER_CAPITA", ""),
+        "svi": p.get("SVI_2022", ""),
+    }
+
+# ---- Blue Acres parcels per municipality ----
+blueacres = {}
+with open(os.path.join(DATA, "blueacres_centroids.geojson"), encoding="utf-8") as f:
+    ba = json.load(f)
+for feat in ba["features"]:
+    m = norm(feat["properties"].get("MUNICIPALI"))
+    if m:
+        blueacres[m] = blueacres.get(m, 0) + 1
+
+# ---- per-city population + tier from all-nj-cities.csv (master 547 list) ----
+cities = {}  # MUN -> {pop, tier, rank}
+with open(os.path.join(DATA, "all-nj-cities.csv"), newline="", encoding="utf-8-sig") as f:
+    for r in csv.DictReader(f):
+        m = norm(r.get("MUNCIPALITY"))
+        if not m:
+            continue
+        cities[m] = {
+            "pop": str(r.get("2024_POP", "")).strip(),
+            "tier": str(r.get("OUTREACH_TIER", "")).strip(),
+            "rank": str(r.get("PRIORITY_RANK", "")).strip(),
+        }
+
+# name reconciliation: GIS export uses SOUTH ORANGE VILLAGE ; master uses SOUTH ORANGE VILLAGE TWP
+ALIAS = {"SOUTH ORANGE VILLAGE TWP": "SOUTH ORANGE VILLAGE"}
+
+def assets_for(mun):
+    key = ALIAS.get(mun, mun)
+    return assets.get(key, {})
+
+# ---- narrative fact generation ----
+def make_facts(name_disp, a):
+    facts = ["", "", ""]
+    allc = a.get("_all", [0, 0, 0])
+    total, r25, r50 = allc
+    if total == 0:
+        return facts
+    def fmtpct(n, d):
+        # match the table's formatting: whole number if integral, else one decimal
+        v = round(100.0 * n / d, 1) if d else 0
+        return str(int(v)) if v == int(v) else str(v)
+    p25n = (100.0 * r25 / total) if total else 0   # numeric, for logic
+    p50n = (100.0 * r50 / total) if total else 0
+    p25 = fmtpct(r25, total)                        # string, for display
+    p50 = fmtpct(r50, total)
+    added = r50 - r25
+    # Fact1: overall exposure trajectory
+    if r25 > 0 and added > 0:
+        if p25n >= 50:
+            # already majority-exposed today
+            tail = (f"<strong>{p50}% of the city's public assets exposed by 2050</strong>, "
+                    f"among the highest exposure in the state.")
+        elif r50 >= 2 * r25 and p50n >= 50:
+            tail = f"<strong>more than doubling exposure and putting {p50}% of the city's public assets at risk by 2050</strong>."
+        elif r50 >= 2 * r25:
+            tail = f"<strong>more than doubling exposure and adding {added} facilities by 2050</strong>."
+        elif p50n >= 50:
+            tail = f"<strong>pushing over half ({p50}%) of the city's public assets into flood risk by 2050</strong>."
+        else:
+            tail = f"<strong>adding {added} facilities by 2050</strong>."
+        facts[0] = (f"<strong>{r25} assets ({p25}%)</strong> sit in flood zones today. "
+                    f"That rises to {r50} ({p50}%), {tail}")
+    elif r25 == 0 and r50 > 0:
+        facts[0] = (f"No public assets sit in flood zones today, but <strong>{r50} ({p50}%) "
+                    f"become exposed by 2050</strong>.")
+    elif r25 > 0 and added == 0:
+        facts[0] = (f"<strong>{r25} assets ({p25}%)</strong> already sit in flood zones, "
+                    f"a level that holds through 2050.")
+    # Fact2 / Fact3: lone critical assets that flip or stay exposed
+    # priority order for "the city's only ___" call-outs
+    crit_order = ["Infra_Wastewater_Treatment", "Infra_Airports", "Infra_Hospitals",
+                  "Infra_Power_Plants", "Infra_Superfund_Sites", "Infra_Hazardous_Waste",
+                  "Infra_Landfills"]
+    callouts = []
+    for prefix in crit_order:
+        cell = a.get(prefix)
+        if not cell:
+            continue
+        t, c25, c50 = cell
+        label = ASSET_LABEL[prefix]
+        if t == 1 and c25 == 0 and c50 == 1:
+            callouts.append(f"{name_disp}'s <strong>only {label}</strong> moves from no flood "
+                            f"exposure to <strong>full exposure by 2050</strong>.")
+        elif t == 1 and c25 == 1:
+            callouts.append(f"{name_disp}'s <strong>only {label}</strong> is already in a flood "
+                            f"zone today and remains at risk through 2050.")
+    if len(callouts) >= 1:
+        facts[1] = callouts[0]
+    if len(callouts) >= 2:
+        facts[2] = callouts[1]
+    return facts
+
+# ---- assemble output ----
+header = ["CITY", "COUNTY", "Atlas_Total_Disaster_Declarations", "POPULATION"]
+for _, prefix in ASSET_TYPES:
+    header += [f"{prefix}_Total", f"{prefix}_In_Floodplain_2025", f"{prefix}_Pct_2025",
+               f"{prefix}_In_Floodplain_2050", f"{prefix}_Pct_2050"]
+header += ["County_FEMA_Total", "County_FEMA_Per_Capita", "County_SVI_2022",
+           "blueacres", "OUTREACH_TIER", "PRIORITY_RANK", "Fact1", "Fact2", "Fact3"]
+
+rows = []
+# iterate over the master 547-city list so every city appears, even zero-asset ones
+all_muns = sorted(set(cities.keys()) | set(assets.keys()) - {ALIAS.get(k) for k in ALIAS})
+for mun in sorted(cities.keys()):
+    a = assets_for(mun)
+    disp = titlecase_mun(mun)
+    cnty = county_for(ALIAS.get(mun, mun))
+    cnty_title = cnty.title() if cnty else ""
+    fema = county_fema.get(cnty, {})
+    row = {
+        "CITY": disp,
+        "COUNTY": cnty_title,
+        "Atlas_Total_Disaster_Declarations": fema.get("disasters", ""),
+        "POPULATION": cities[mun]["pop"],
+        "County_FEMA_Total": fema.get("total_fema", ""),
+        "County_FEMA_Per_Capita": fema.get("per_capita", ""),
+        "County_SVI_2022": fema.get("svi", ""),
+        "blueacres": blueacres.get(ALIAS.get(mun, mun), ""),
+        "OUTREACH_TIER": cities[mun]["tier"],
+        "PRIORITY_RANK": cities[mun]["rank"],
+    }
+    for _, prefix in ASSET_TYPES:
+        t, c25, c50 = a.get(prefix, [0, 0, 0])
+        row[f"{prefix}_Total"] = t
+        row[f"{prefix}_In_Floodplain_2025"] = c25 if c25 else ""
+        row[f"{prefix}_Pct_2025"] = pct(c25, t)
+        row[f"{prefix}_In_Floodplain_2050"] = c50 if c50 else ""
+        row[f"{prefix}_Pct_2050"] = pct(c50, t)
+    f1, f2, f3 = make_facts(disp, a)
+    row["Fact1"], row["Fact2"], row["Fact3"] = f1, f2, f3
+    rows.append(row)
+
+with open(OUT, "w", newline="", encoding="utf-8") as f:
+    w = csv.DictWriter(f, fieldnames=header)
+    w.writeheader()
+    for r in rows:
+        w.writerow(r)
+
+# summary to stderr
+n_assets = sum(1 for r in rows if any(r[f"{p}_Total"] for _, p in ASSET_TYPES))
+print(f"Wrote {len(rows)} cities to {OUT} ({n_assets} with at least one public asset).", file=sys.stderr)
