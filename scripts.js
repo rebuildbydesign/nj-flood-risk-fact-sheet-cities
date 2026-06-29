@@ -8,9 +8,21 @@
 let COUNTIES = {};   // populated from CSV
 let CITIES = {};   // populated from CSV
 let FEMA = {};       // populated from CSV
-let CSV_DATA = {};   // raw CSV rows keyed by city
+let CSV_DATA = {};   // raw CSV rows keyed by composite city key
 let NONRENEWALS = {}; // populated from non-renewals CSV
 let POPULATION_2024 = {}; // populated from 2024 population CSV
+
+// 12 township names repeat across counties (5 Washington Twps, etc.). We key every
+// municipality by NAME + COUNTY so same-named towns don't collapse onto one row.
+let CITY_COUNT = {};   // CITY name -> how many counties it appears in
+let CITY_ENTRIES = []; // [{ key, label }] for the search dropdown
+
+function isSameNamedCity(city) { return (CITY_COUNT[city] || 0) > 1; }
+function factKey(city, county) {
+  return (county && isSameNamedCity(city))
+    ? `${city}|${String(county).toUpperCase()}`
+    : city;
+}
 
 
 // ── ASSET LABELS ────────────────────────────────────────────────
@@ -89,16 +101,30 @@ function buildPopulationLookup(rows) {
 }
 
 function buildDataFromCSV(rows) {
+  // First pass: how many counties each CITY name appears in (to detect same-named).
+  CITY_COUNT = {};
+  rows.forEach(r => {
+    const c = String(r['CITY'] || '').trim();
+    if (c) CITY_COUNT[c] = (CITY_COUNT[c] || 0) + 1;
+  });
+  CITY_ENTRIES = [];
+
   rows.forEach(r => {
     const name = String(r['CITY'] || '').trim();
     if (!name) return;
+    const county = String(r['COUNTY'] || '').trim();
+    const key = factKey(name, county);
+    const label = isSameNamedCity(name) && county ? `${name} (${county})` : name;
 
-    CSV_DATA[name] = r;
+    CSV_DATA[key] = r;
+    CITY_ENTRIES.push({ key, label });
 
     const totalPop = num(r['POPULATION']);
-  
 
-    CITIES[name] = {
+    CITIES[key] = {
+      city: name,
+      county: county,
+      label: label,
       geoid: r['GEOID'],
       assets: {
         airports: [num(r['Infra_Airports_Total']), num(r['Infra_Airports_In_Floodplain_2025']), num(r['Infra_Airports_In_Floodplain_2050'])],
@@ -118,15 +144,18 @@ function buildDataFromCSV(rows) {
     };
 
   // FEMA data
-    FEMA[name] = {
+    FEMA[key] = {
       disasters: num(r['Atlas_Total_Disaster_Declarations']),
     };
 
     // ── LOAD FACT COLUMNS (ensure all strings, trim, remove empty) ──
-    CITIES[name].facts = ['Fact1', 'Fact2', 'Fact3']
-      .map(key => String(r[key] || '').trim())
+    CITIES[key].facts = ['Fact1', 'Fact2', 'Fact3']
+      .map(col => String(r[col] || '').trim())
       .filter(Boolean); // remove empty strings
   });
+
+  // Sort search entries by their display label.
+  CITY_ENTRIES.sort((a, b) => a.label.localeCompare(b.label));
 }
 
 
@@ -167,23 +196,39 @@ function slugifyCityName(name) {
     .replace(/^-+|-+$/g, '');
 }
 
-function findCityMatch(rawValue) {
-  if (!rawValue) return '';
-  const normalized = slugifyCityName(decodeURIComponent(rawValue));
-  return Object.keys(CITIES).find(name => slugifyCityName(name) === normalized) || '';
+// Resolve a raw city value (+ optional county) to a composite CITIES key.
+// Same-named towns need the county to land on the right row; unique names ignore it.
+function findCityMatch(rawCity, rawCounty) {
+  if (!rawCity) return '';
+  const slug = slugifyCityName(decodeURIComponent(rawCity));
+  const wantCounty = rawCounty ? String(rawCounty).toUpperCase().trim() : '';
+  const candidates = Object.values(CITIES).filter(c => slugifyCityName(c.city) === slug);
+  if (!candidates.length) return '';
+  let chosen = candidates[0];
+  if (wantCounty) {
+    const m = candidates.find(c => String(c.county).toUpperCase() === wantCounty);
+    if (m) chosen = m;
+  }
+  return factKey(chosen.city, chosen.county);
 }
 
 function getCityFromURL() {
   const params = new URLSearchParams(window.location.search);
-  return findCityMatch(params.get('city') || window.location.hash.replace(/^#/, ''));
+  const city = params.get('city') || window.location.hash.replace(/^#/, '');
+  const county = params.get('county') || '';
+  return findCityMatch(city, county);
 }
 
-function syncCityURL(name) {
+function syncCityURL(key) {
   const url = new URL(window.location.href);
-  if (name) {
-    url.searchParams.set('city', name);
+  const c = CITIES[key];
+  if (c) {
+    url.searchParams.set('city', c.city);
+    if (isSameNamedCity(c.city) && c.county) url.searchParams.set('county', c.county);
+    else url.searchParams.delete('county');
   } else {
     url.searchParams.delete('city');
+    url.searchParams.delete('county');
   }
   url.hash = '';
   window.history.replaceState({}, '', url);
@@ -319,13 +364,14 @@ function highlightMatch(label, q) {
     escapeHtml(label.slice(i + q.length));
 }
 function initMuniSearch(input, list, entries) {
+  // entries: [{ key, label }]. We filter/display by label, commit by key.
   let matches = [], active = -1;
   function filter(q) {
     q = (q || '').trim().toLowerCase();
     if (!q) return entries.slice(0, 60);
     const pre = [], sub = [];
     for (const e of entries) {
-      const l = e.toLowerCase();
+      const l = e.label.toLowerCase();
       if (l.startsWith(q)) pre.push(e);
       else if (l.includes(q)) sub.push(e);
     }
@@ -336,13 +382,13 @@ function initMuniSearch(input, list, entries) {
     active = matches.length ? 0 : -1;
     list.innerHTML = matches.length
       ? matches.map((e, i) =>
-          `<li class="muni-search-option${i === active ? ' is-active' : ''}" role="option" data-i="${i}">${highlightMatch(e, q)}</li>`).join('')
+          `<li class="muni-search-option${i === active ? ' is-active' : ''}" role="option" data-i="${i}">${highlightMatch(e.label, q)}</li>`).join('')
       : '<li class="muni-search-empty">No municipality matches</li>';
     list.hidden = false;
     input.setAttribute('aria-expanded', 'true');
   }
   function hide() { list.hidden = true; active = -1; input.setAttribute('aria-expanded', 'false'); }
-  function commit(name) { if (name) { input.value = name; hide(); renderCity(name); } }
+  function commit(entry) { if (entry) { input.value = entry.label; hide(); renderCity(entry.key); } }
   input.addEventListener('focus', () => render(input.value));
   input.addEventListener('input', () => render(input.value));
   input.addEventListener('keydown', (ev) => {
@@ -376,12 +422,11 @@ function initMuniSearch(input, list, entries) {
     buildDataFromCSV(csvRows);
     buildPopulationLookup(popRows);
 
-    const names = Object.keys(CITIES).sort();
-    initMuniSearch(sel, list, names);
+    initMuniSearch(sel, list, CITY_ENTRIES);
 
-    const urlCity = getCityFromURL();
-    const initialCity = findCityMatch(urlCity) || names[0];
-    renderCity(initialCity);
+    // getCityFromURL already resolves ?city=&county= to a composite key.
+    const initialKey = getCityFromURL() || (CITY_ENTRIES[0] && CITY_ENTRIES[0].key);
+    renderCity(initialKey);
 
   });
 })();
@@ -430,22 +475,15 @@ function buildAssetTwoCol(assetArr, totals) {
 }
 
 // ── RENDER CITY FACT SHEET ────────────────────────────────────
-function renderCity(name) {
-  const matchedName = findCityMatch(name?.trim()) || name?.trim();
-
-  console.log("INPUT:", name);
-  console.log("MATCHED:", matchedName);
-  console.log("CITY EXISTS:", CITIES[matchedName]);
+function renderCity(keyOrName) {
+  // Accept a resolved composite key, or a raw name/label to resolve.
+  const matchedKey = CITIES[keyOrName] ? keyOrName : findCityMatch(keyOrName);
 
   const container = document.getElementById('fact-sheet-container');
   const btn = document.getElementById('btn-export');
   const sel = document.getElementById('city-select');
 
-  
-
-  if (sel && sel.value !== matchedName) sel.value = matchedName;
-
-  if (!matchedName) {
+  if (!matchedKey || !CITIES[matchedKey]) {
     syncCityURL('');
     container.innerHTML = `<div class="empty-state">
       <h2>City-Level Flood Risk, Ready to Explore</h2>
@@ -455,30 +493,33 @@ function renderCity(name) {
     return;
   }
 
-  syncCityURL(matchedName);
+  syncCityURL(matchedKey);
   btn.disabled = false;
-  const c = CITIES[matchedName?.trim()];
-  const f = FEMA[matchedName?.trim()];
-  const row = CSV_DATA[matchedName?.trim()] || {};
-  const population2024 = POPULATION_2024[normalizeMunicipalityName(matchedName)] || num(row.POPULATION);
+  const c = CITIES[matchedKey];
+  const f = FEMA[matchedKey];
+  const row = CSV_DATA[matchedKey] || {};
+  // Display name (plain city name) is separate from the lookup key.
+  const cityName = c.city;
+  if (sel && sel.value !== c.label) sel.value = c.label;
+  const population2024 = num(row.POPULATION) || POPULATION_2024[normalizeMunicipalityName(cityName)];
   const countyName = String(row.COUNTY || '').trim();
   const blueAcresParcels = num(row.blueacres);
   const countyIntro = countyName
     ? `is part of <strong>${countyName} County</strong> and has experienced`
     : 'has experienced';
   const placeTitle = countyName
-    ? `${matchedName}, ${countyName} County, New Jersey`
-    : `${matchedName}, New Jersey`;
-  const fundingPlaceName = matchedName;
+    ? `${cityName}, ${countyName} County, New Jersey`
+    : `${cityName}, New Jersey`;
+  const fundingPlaceName = cityName;
   const blueAcresSummary = blueAcresParcels > 0
-    ? `Displacement is already underway. <strong>${matchedName}</strong> accounts for <strong>${fmt(blueAcresParcels)} Blue Acres buyout ${blueAcresParcels === 1 ? 'property' : 'properties'}</strong>, part of <strong>1,677 statewide buyouts since 1987</strong>.`
-    : `No Blue Acres buyouts are recorded for <strong>${matchedName}</strong> in this dataset, though displacement pressure is already visible in nearby communities across ${countyName ? `<strong>${countyName} County</strong>` : 'New Jersey'} and statewide.`;
+    ? `Displacement is already underway. <strong>${cityName}</strong> accounts for <strong>${fmt(blueAcresParcels)} Blue Acres buyout ${blueAcresParcels === 1 ? 'property' : 'properties'}</strong>, part of <strong>1,677 statewide buyouts since 1987</strong>.`
+    : `No Blue Acres buyouts are recorded for <strong>${cityName}</strong> in this dataset, though displacement pressure is already visible in nearby communities across ${countyName ? `<strong>${countyName} County</strong>` : 'New Jersey'} and statewide.`;
   const blueAcresDetail = blueAcresParcels > 0
     ? `These flood-damaged properties were acquired through New Jersey's voluntary home buyout program, Blue Acres.`
     : `The absence of recorded buyouts here does not mean the city is free from flood-related housing risk.`;
   if (!c || !f) {
   container.innerHTML = `<div class="empty-state">
-    <p>No data available for ${matchedName}.</p>
+    <p>No data available for ${cityName}.</p>
   </div>`;
   return;
 }
@@ -503,7 +544,7 @@ function renderCity(name) {
 
 
   // Build map SVG
-  const mapSVG = buildNJMapSVG(matchedName);
+  const mapSVG = buildNJMapSVG(cityName);
 
   container.innerHTML = `
   <div class="fact-sheet" id="fact-sheet">
@@ -525,7 +566,7 @@ function renderCity(name) {
         </div>
         <div class="bond-message">
           <ul class="bond-message-list">
-            <li><strong>${matchedName}</strong> ${countyIntro} <strong>${f.disasters} federal disaster declarations</strong> since 2011.</li>
+            <li><strong>${cityName}</strong> ${countyIntro} <strong>${f.disasters} federal disaster declarations</strong> since 2011.</li>
             <li>Across the state, 93% of NJ voters want investments to reduce weather damage and <strong>77%</strong> are worried about extreme weather across party lines <a class="citation-link" href="https://www.fdu.edu/news/fdu-poll-finds-3-in-4-nj-voters-worried-about-damage-from-extreme-weather/" target="_blank" rel="noopener noreferrer">(Fairleigh Dickinson University, 2024)</a>.</li>
             ${c.facts && c.facts.length 
             ? c.facts.map(f => `<li>${f}</li>`).join('')
@@ -554,12 +595,12 @@ function renderCity(name) {
  
   <div class="metric-cell">
   <div class="risk-card-title">County FEMA Funding</div>
-  <div class="metric-value purple">${fmtDollar(num(CSV_DATA[matchedName].County_FEMA_Per_Capita))}</div>
+  <div class="metric-value purple">${fmtDollar(num(row.County_FEMA_Per_Capita))}</div>
   <div class="metric-sub">Per Capita, 2011 – 2024</div>
 </div>
  <div class="metric-cell">
   <div class="risk-card-title">Blue Acres State Buyout Program</div>
-  <div class="metric-value teal">${fmt(num(CSV_DATA[matchedName].blueacres))}</div>
+  <div class="metric-value teal">${fmt(num(row.blueacres))}</div>
   <div class="metric-sub">Municipal Buyout Parcels</div>
 </div>
 

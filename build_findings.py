@@ -16,16 +16,29 @@ Inputs (all under nj-flood-risk-city/data unless noted):
 Output:
   - nj-city-findings.csv          one row per municipality, app-ready schema
 
-Note on duplicate names: NJ has several townships sharing a name across counties
-(e.g. multiple "Washington Twp"). The existing all-nj-cities.csv merges these by
-name, so this script does the same to stay consistent with the existing rankings.
-"""
-import json, csv, os, sys
+Duplicate names (FIXED 2026-06): NJ has 12 township names shared across counties
+(5 "Washington Twp", 4 "Franklin Twp", etc.). This script now keys every
+municipality by NAME + COUNTY so each same-named township is a SEPARATE row.
+Pine Valley Borough (dissolved 2022) is excluded. Populations come from the
+authoritative 564-municipality master (Census 2024 SUB-EST estimates).
 
-BASE = sys.argv[1] if len(sys.argv) > 1 else "."
-DATA = os.path.join(BASE, "nj-flood-risk-city", "data")
-FEMA_GEO = os.path.join(BASE, "NJ_FEMA_County.geojson")
-OUT = sys.argv[2] if len(sys.argv) > 2 else "nj-city-findings.csv"
+Run from the fact-sheet repo root:  python build_findings.py
+Inputs:
+  this repo:    data/boundary.json, data/NJ_FEMA_County.geojson,
+                data/nj-cities-cleanup-564.csv  (the 564 master, with Census pops)
+  sibling repo: ../nj-flood-risk-city/data/gis-export-key-findings.csv,
+                ../nj-flood-risk-city/data/all-nj-cities.csv (outreach tier/rank),
+                ../nj-flood-risk-city/data/blueacres_centroids.geojson
+"""
+import json, csv, os, sys, re
+
+# Repo root (folder containing this script) unless overridden.
+BASE = sys.argv[1] if len(sys.argv) > 1 else os.path.dirname(os.path.abspath(__file__))
+LOCAL = os.path.join(BASE, "data")
+DATA = os.path.join(BASE, "..", "nj-flood-risk-city", "data")  # sibling map repo
+FEMA_GEO = os.path.join(LOCAL, "NJ_FEMA_County.geojson")
+MASTER = os.path.join(LOCAL, "nj-cities-cleanup-564.csv")
+OUT = sys.argv[2] if len(sys.argv) > 2 else os.path.join(BASE, "nj-city-findings.csv")
 
 # PUBLIC_ASSET value -> (output column prefix)
 ASSET_TYPES = [
@@ -80,45 +93,67 @@ def titlecase_mun(mun):
 def pct(n, d):
     return f"{(100.0*n/d):.2f}%" if d else "0.00%"
 
-# ---- load GIS asset export ----
-assets = {}   # MUN -> { prefix: [total, f25, f50] }, plus '_all'
-county_votes = {}  # MUN -> {county: count}  (pick dominant county)
+# ---- authoritative municipalities from boundary.json (NAME + COUNTY) ----
+# Each same-named township is a separate record; Pine Valley (dissolved) excluded.
+records = []                 # [(MUN, COUNTY)] for all 564 real municipalities
+name_county_count = {}       # MUN -> number of counties it appears in
+with open(os.path.join(LOCAL, "boundary.json"), encoding="utf-8") as f:
+    bd = json.load(f)
+for feat in bd["features"]:
+    p = feat["properties"]
+    m = norm(p.get("MUN")); c = norm(p.get("COUNTY"))
+    if not m or m == "PINE VALLEY BORO":
+        continue
+    records.append((m, c))
+    name_county_count[m] = name_county_count.get(m, 0) + 1
+
+def is_same_named(mun):
+    return name_county_count.get(mun, 0) > 1
+
+def city_key(mun, county):
+    # Composite key for same-named towns; plain name otherwise (so border-tagged
+    # strays aggregate under the one city, matching the 564 master).
+    return f"{mun}|{county}" if (county and is_same_named(mun)) else mun
+
+# ---- load GIS asset export (aggregate by composite NAME+COUNTY key) ----
+assets = {}   # key -> { prefix: [total, f25, f50] }, plus '_all'
 type_lookup = {a[0]: a[1] for a in ASSET_TYPES}
 with open(os.path.join(DATA, "gis-export-key-findings.csv"), newline="", encoding="utf-8-sig") as f:
     for r in csv.DictReader(f):
         mun = norm(r.get("MUNCIPALITY"))
         if not mun:
             continue
+        # GIS export uses "SOUTH ORANGE VILLAGE"; boundary/master use "... TWP".
+        if mun == "SOUTH ORANGE VILLAGE":
+            mun = "SOUTH ORANGE VILLAGE TWP"
+        cnty = norm(r.get("COUNTY"))
+        key = city_key(mun, cnty)
         ptype = norm(r.get("PUBLIC_ASSET"))
         prefix = type_lookup.get(ptype)
         f25 = 1 if str(r.get("2025_FLOOD", "")).strip() in ("1", "1.0") else 0
         f50 = 1 if str(r.get("2050 FLOOD", "")).strip() in ("1", "1.0") else 0
-        d = assets.setdefault(mun, {})
+        d = assets.setdefault(key, {})
         cell = d.setdefault(prefix or "_other", [0, 0, 0])
         cell[0] += 1; cell[1] += f25; cell[2] += f50
         allc = d.setdefault("_all", [0, 0, 0])
         allc[0] += 1; allc[1] += f25; allc[2] += f50
-        cnty = norm(r.get("COUNTY"))
-        if cnty:
-            county_votes.setdefault(mun, {}).setdefault(cnty, 0)
-            county_votes[mun][cnty] += 1
 
-# ---- authoritative MUN -> COUNTY from boundary.json (fallback) ----
-mun_county = {}
-with open(os.path.join(DATA, "boundary.json"), encoding="utf-8") as f:
-    bd = json.load(f)
-for feat in bd["features"]:
-    p = feat["properties"]
-    m = norm(p.get("MUN"))
-    c = norm(p.get("COUNTY"))
-    if m and c:
-        mun_county.setdefault(m, c)
-
-def county_for(mun):
-    # prefer dominant county among that muni's assets, else boundary file
-    if mun in county_votes:
-        return max(county_votes[mun].items(), key=lambda kv: kv[1])[0]
-    return mun_county.get(mun, "")
+# ---- 2024 population from the authoritative 564 master (Census SUB-EST) ----
+# Master labels: "NEWARK CITY" (unique) or "WASHINGTON TWP (GLOUCESTER)" (same-named).
+pop_by_key = {}
+with open(MASTER, newline="", encoding="utf-8-sig") as f:
+    reader = csv.reader(f)
+    next(reader, None)  # header
+    for row in reader:
+        if not row or not row[0].strip():
+            continue
+        label = row[0].strip()
+        mm = re.match(r"^(.*?)\s*\(([^)]+)\)\s*$", label)
+        if mm:
+            mun = norm(mm.group(1)); county = norm(mm.group(2))
+        else:
+            mun = norm(label); county = None
+        pop_by_key[city_key(mun, county)] = str(row[1]).strip()  # "2024 POP" column
 
 # ---- county-level FEMA / Atlas of Disaster ----
 county_fema = {}  # COUNTY (upper) -> dict
@@ -155,13 +190,6 @@ with open(os.path.join(DATA, "all-nj-cities.csv"), newline="", encoding="utf-8-s
             "tier": str(r.get("OUTREACH_TIER", "")).strip(),
             "rank": str(r.get("PRIORITY_RANK", "")).strip(),
         }
-
-# name reconciliation: GIS export uses SOUTH ORANGE VILLAGE ; master uses SOUTH ORANGE VILLAGE TWP
-ALIAS = {"SOUTH ORANGE VILLAGE TWP": "SOUTH ORANGE VILLAGE"}
-
-def assets_for(mun):
-    key = ALIAS.get(mun, mun)
-    return assets.get(key, {})
 
 # ---- narrative fact generation ----
 def make_facts(name_disp, a):
@@ -234,25 +262,27 @@ header += ["County_FEMA_Total", "County_FEMA_Per_Capita", "County_SVI_2022",
            "blueacres", "OUTREACH_TIER", "PRIORITY_RANK", "Fact1", "Fact2", "Fact3"]
 
 rows = []
-# iterate over the master 547-city list so every city appears, even zero-asset ones
-all_muns = sorted(set(cities.keys()) | set(assets.keys()) - {ALIAS.get(k) for k in ALIAS})
-for mun in sorted(cities.keys()):
-    a = assets_for(mun)
+# Iterate over the authoritative 564 municipalities (NAME + COUNTY), so every real
+# municipality appears, including each same-named township and zero-asset towns.
+for mun, county in sorted(records, key=lambda x: (titlecase_mun(x[0]), x[1])):
+    key = city_key(mun, county)
+    a = assets.get(key, {})
     disp = titlecase_mun(mun)
-    cnty = county_for(ALIAS.get(mun, mun))
-    cnty_title = cnty.title() if cnty else ""
-    fema = county_fema.get(cnty, {})
+    cnty_title = county.title() if county else ""
+    fema = county_fema.get(county, {})
+    cinfo = cities.get(mun, {})  # outreach tier/rank keyed by name (carried to siblings)
     row = {
         "CITY": disp,
         "COUNTY": cnty_title,
         "Atlas_Total_Disaster_Declarations": fema.get("disasters", ""),
-        "POPULATION": cities[mun]["pop"],
+        "POPULATION": pop_by_key.get(key, ""),
         "County_FEMA_Total": fema.get("total_fema", ""),
         "County_FEMA_Per_Capita": fema.get("per_capita", ""),
         "County_SVI_2022": fema.get("svi", ""),
-        "blueacres": blueacres.get(ALIAS.get(mun, mun), ""),
-        "OUTREACH_TIER": cities[mun]["tier"],
-        "PRIORITY_RANK": cities[mun]["rank"],
+        # Blue Acres parcels lack a county field; only assign for unique names.
+        "blueacres": (blueacres.get(mun, "") if not is_same_named(mun) else ""),
+        "OUTREACH_TIER": cinfo.get("tier", ""),
+        "PRIORITY_RANK": cinfo.get("rank", ""),
     }
     for _, prefix in ASSET_TYPES:
         t, c25, c50 = a.get(prefix, [0, 0, 0])
