@@ -10,7 +10,6 @@ let CITIES = {};   // populated from CSV
 let FEMA = {};       // populated from CSV
 let CSV_DATA = {};   // raw CSV rows keyed by composite city key
 let NONRENEWALS = {}; // populated from non-renewals CSV
-let POPULATION_2024 = {}; // populated from 2024 population CSV
 
 // 12 township names repeat across counties (5 Washington Twps, etc.). We key every
 // municipality by NAME + COUNTY so same-named towns don't collapse onto one row.
@@ -81,24 +80,8 @@ function parseCSVLine(line) {
   return result;
 }
 
-function num(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
-
-function normalizeMunicipalityName(name) {
-  return String(name || '')
-    .toUpperCase()
-    .replace(/\b(CITY|TWP|TOWNSHIP|TOWN|BORO|BOROUGH|VILLAGE|VLG)\b/g, '')
-    .replace(/[^A-Z0-9]+/g, ' ')
-    .trim();
-}
-
-function buildPopulationLookup(rows) {
-  POPULATION_2024 = {};
-  rows.forEach(r => {
-    const normalized = normalizeMunicipalityName(r['MUNCIPALITY']);
-    if (!normalized) return;
-    POPULATION_2024[normalized] = num(String(r['2024_POP'] || '').replace(/,/g, ''));
-  });
-}
+// CSV numbers may carry thousands separators ("93,911"); parseFloat would stop at the comma.
+function num(v) { const n = parseFloat(String(v == null ? '' : v).replace(/,/g, '')); return isNaN(n) ? 0 : n; }
 
 function buildDataFromCSV(rows) {
   // First pass: how many counties each CITY name appears in (to detect same-named).
@@ -415,12 +398,10 @@ function initMuniSearch(input, list, entries) {
   const list = document.getElementById('city-search-list');
 
   Promise.all([
-    loadCSV('nj-city-findings.csv'),
-    loadCSV('data/nj_pop_2024.csv')
-  ]).then(([csvRows, popRows]) => {
+    loadCSV('nj-city-findings.csv')
+  ]).then(([csvRows]) => {
 
     buildDataFromCSV(csvRows);
-    buildPopulationLookup(popRows);
 
     initMuniSearch(sel, list, CITY_ENTRIES);
 
@@ -501,7 +482,7 @@ function renderCity(keyOrName) {
   // Display name (plain city name) is separate from the lookup key.
   const cityName = c.city;
   if (sel && sel.value !== c.label) sel.value = c.label;
-  const population2024 = num(row.POPULATION) || POPULATION_2024[normalizeMunicipalityName(cityName)];
+  const population2024 = num(row.POPULATION);
   const countyName = String(row.COUNTY || '').trim();
   const blueAcresParcels = num(row.blueacres);
   const countyIntro = countyName

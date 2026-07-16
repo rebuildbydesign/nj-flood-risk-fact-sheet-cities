@@ -76,6 +76,20 @@ ASSET_LABEL = {
 def norm(s):
     return str(s or "").upper().strip()
 
+def canon_mun(s):
+    """Reconcile municipality-type spellings across sources.
+
+    boundary.json writes "MANVILLE BORO" / "WOODBRIDGE TWP"; the Blue Acres
+    export writes "MANVILLE BOROUGH" / "WOODBRIDGE TOWNSHIP". Only the 52 CITY
+    names collided by luck, so a plain upper()/strip() compare silently dropped
+    every borough and township parcel.
+    """
+    s = norm(s)
+    s = re.sub(r"\bTOWNSHIP\b", "TWP", s)
+    s = re.sub(r"\bBOROUGH\b", "BORO", s)
+    s = re.sub(r"\bVILLAGE\b", "VLG", s)
+    return re.sub(r"[^A-Z0-9]+", " ", s).strip()
+
 def titlecase_mun(mun):
     """NEWARK CITY -> Newark City ; expand common type suffixes nicely."""
     repl = {"TWP": "Township", "BORO": "Borough", "VLG": "Village"}
@@ -114,6 +128,14 @@ def city_key(mun, county):
     # Composite key for same-named towns; plain name otherwise (so border-tagged
     # strays aggregate under the one city, matching the 564 master).
     return f"{mun}|{county}" if (county and is_same_named(mun)) else mun
+
+# Canonical index of the real municipalities, for joining sources that spell
+# municipality types differently. Keyed both with and without county.
+boundary_by_canon = {}    # (canon MUN, COUNTY) -> (MUN, COUNTY)
+boundary_by_name = {}     # canon MUN -> [(MUN, COUNTY), ...]
+for _m, _c in records:
+    boundary_by_canon[(canon_mun(_m), _c)] = (_m, _c)
+    boundary_by_name.setdefault(canon_mun(_m), []).append((_m, _c))
 
 # ---- load GIS asset export (aggregate by composite NAME+COUNTY key) ----
 assets = {}   # key -> { prefix: [total, f25, f50] }, plus '_all'
@@ -169,14 +191,29 @@ for feat in fg["features"]:
         "svi": p.get("SVI_2022", ""),
     }
 
-# ---- Blue Acres parcels per municipality ----
+# ---- Blue Acres parcels per municipality (keyed NAME + COUNTY) ----
 blueacres = {}
+ba_unmatched = []
 with open(os.path.join(DATA, "blueacres_centroids.geojson"), encoding="utf-8") as f:
     ba = json.load(f)
 for feat in ba["features"]:
-    m = norm(feat["properties"].get("MUNICIPALI"))
-    if m:
-        blueacres[m] = blueacres.get(m, 0) + 1
+    p = feat["properties"]
+    m = canon_mun(p.get("MUNICIPALI"))
+    c = norm(p.get("COUNTY"))
+    if not m:
+        continue
+    hit = boundary_by_canon.get((m, c))
+    if not hit:
+        # The export's county is occasionally wrong (one parcel files Bound Brook
+        # Boro under Middlesex; it is Somerset). Fall back to the name alone when
+        # that name exists in exactly one county.
+        cands = boundary_by_name.get(m, [])
+        hit = cands[0] if len(cands) == 1 else None
+    if not hit:
+        ba_unmatched.append((m, c))
+        continue
+    key = city_key(*hit)
+    blueacres[key] = blueacres.get(key, 0) + 1
 
 # ---- per-city population + tier from all-nj-cities.csv (master 547 list) ----
 cities = {}  # MUN -> {pop, tier, rank}
@@ -279,8 +316,7 @@ for mun, county in sorted(records, key=lambda x: (titlecase_mun(x[0]), x[1])):
         "County_FEMA_Total": fema.get("total_fema", ""),
         "County_FEMA_Per_Capita": fema.get("per_capita", ""),
         "County_SVI_2022": fema.get("svi", ""),
-        # Blue Acres parcels lack a county field; only assign for unique names.
-        "blueacres": (blueacres.get(mun, "") if not is_same_named(mun) else ""),
+        "blueacres": blueacres.get(key, ""),
         "OUTREACH_TIER": cinfo.get("tier", ""),
         "PRIORITY_RANK": cinfo.get("rank", ""),
     }
@@ -304,3 +340,12 @@ with open(OUT, "w", newline="", encoding="utf-8") as f:
 # summary to stderr
 n_assets = sum(1 for r in rows if any(r[f"{p}_Total"] for _, p in ASSET_TYPES))
 print(f"Wrote {len(rows)} cities to {OUT} ({n_assets} with at least one public asset).", file=sys.stderr)
+
+# Blue Acres reconciliation: the total must tie back to the source parcel count,
+# which is also the "1,677 statewide buyouts" figure cited on every fact sheet.
+_placed = sum(blueacres.values())
+print(f"Blue Acres: {_placed}/{len(ba['features'])} parcels placed across "
+      f"{len(blueacres)} municipalities.", file=sys.stderr)
+if ba_unmatched:
+    print(f"  WARNING: {len(ba_unmatched)} parcel(s) unmatched: {sorted(set(ba_unmatched))}",
+          file=sys.stderr)
