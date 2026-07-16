@@ -643,9 +643,7 @@ function renderCity(keyOrName) {
         <div class="fs-footer-title">Methodology &amp; Notes</div>
         <ul class="fs-footer-list">
           <li>This fact sheet draws from three Rebuild by Design research products: the <strong>Atlas of Disaster</strong> (county-level disaster declarations and FEMA obligations, 2011–2024), <strong>NJ Flood Risk = Financial Risk</strong> (parcel-level displacement and financial analysis of all 3.4 million NJ properties), and <strong>NJ Underwater: Public Infrastructure at Risk</strong> (exposure analysis of 18,959 public assets under 2025 and 2050 flood conditions).</li>
-          <li><strong>Population:</strong> 2024 municipal estimates from the US Census Bureau (Vintage 2024 Subcounty Population Estimates, SUB-EST2024). Twelve township names are shared across New Jersey counties, including five Washington Townships and two Hamilton Townships; each is reported separately by county rather than combined.</li>
-          <li><strong>Blue Acres:</strong> counts are buyout parcels within the municipality, acquired through NJDEP's voluntary Blue Acres program, out of 1,677 parcels statewide since 1987. FEMA funding is obligated at the county level and is shown per county resident, not per municipality.</li>
-          <li><strong>Data Sources:</strong> EPA, Fairleigh Dickinson University 2024, FEMA, NJ Office of GIS, NJDCA GIS, NJDEP, Rutgers University, Trust for Public Land, US Census Bureau 2024, US EIA, USDOT.</li>
+          <li><strong>Data Sources:</strong> EPA, Fairleigh Dickinson University 2024, FEMA, NJ Office of GIS, NJDCA GIS, NJDEP, Rutgers University, Trust for Public Land, US Census 2024 Population Estimates, US EIA, USDOT.</li>
         </ul>
       </div>
       <div>
