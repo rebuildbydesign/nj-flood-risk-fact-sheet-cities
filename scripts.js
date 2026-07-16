@@ -5,11 +5,9 @@
    ================================================================ */
 
 // ── GLOBAL STATE ──────────────────────────────────────────────────
-let COUNTIES = {};   // populated from CSV
 let CITIES = {};   // populated from CSV
 let FEMA = {};       // populated from CSV
 let CSV_DATA = {};   // raw CSV rows keyed by composite city key
-let NONRENEWALS = {}; // populated from non-renewals CSV
 
 // 12 township names repeat across counties (5 Washington Twps, etc.). We key every
 // municipality by NAME + COUNTY so same-named towns don't collapse onto one row.
@@ -157,12 +155,6 @@ function growthClass(g) {
   if (g >= 100) return 'high';
   if (g >= 40) return 'med';
   return 'low';
-}
-function sviLabel(v) {
-  if (v >= 0.75) return 'Very High';
-  if (v >= 0.5) return 'High';
-  if (v >= 0.25) return 'Moderate';
-  return 'Low';
 }
 
 function slugifyCityName(name) {
@@ -651,7 +643,9 @@ function renderCity(keyOrName) {
         <div class="fs-footer-title">Methodology &amp; Notes</div>
         <ul class="fs-footer-list">
           <li>This fact sheet draws from three Rebuild by Design research products: the <strong>Atlas of Disaster</strong> (county-level disaster declarations and FEMA obligations, 2011–2024), <strong>NJ Flood Risk = Financial Risk</strong> (parcel-level displacement and financial analysis of all 3.4 million NJ properties), and <strong>NJ Underwater: Public Infrastructure at Risk</strong> (exposure analysis of 18,959 public assets under 2025 and 2050 flood conditions).</li>
-<li><strong>Data Sources:</strong> CDC/ATSDR 2022, EPA, FEMA, NJ Office of GIS, NJDEP, Rutgers University, Senate Budget Office, Trust for Public Land, US EIA, USDOT.</li>
+          <li><strong>Population:</strong> 2024 municipal estimates from the US Census Bureau (Vintage 2024 Subcounty Population Estimates, SUB-EST2024). Twelve township names are shared across New Jersey counties, including five Washington Townships and two Hamilton Townships; each is reported separately by county rather than combined.</li>
+          <li><strong>Blue Acres:</strong> counts are buyout parcels within the municipality, acquired through NJDEP's voluntary Blue Acres program, out of 1,677 parcels statewide since 1987. FEMA funding is obligated at the county level and is shown per county resident, not per municipality.</li>
+          <li><strong>Data Sources:</strong> EPA, Fairleigh Dickinson University 2024, FEMA, NJ Office of GIS, NJDCA GIS, NJDEP, Rutgers University, Trust for Public Land, US Census Bureau 2024, US EIA, USDOT.</li>
         </ul>
       </div>
       <div>
