@@ -149,6 +149,10 @@ with open(os.path.join(DATA, "gis-export-key-findings.csv"), newline="", encodin
         if mun == "SOUTH ORANGE VILLAGE":
             mun = "SOUTH ORANGE VILLAGE TWP"
         cnty = norm(r.get("COUNTY"))
+        # SCHOOL-3353 (Cumberland Campus, 13 Ramah Rd) is tagged Salem, which has
+        # no Fairfield Twp; it sits in Fairfield Twp, Cumberland.
+        if r.get("UNIQUE_ID") == "SCHOOL-3353":
+            cnty = "CUMBERLAND"
         key = city_key(mun, cnty)
         ptype = norm(r.get("PUBLIC_ASSET"))
         prefix = type_lookup.get(ptype)
