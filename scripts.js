@@ -415,7 +415,7 @@ function buildAssetTwoCol(assetArr, totals) {
     items.forEach(a => {
       const m = ASSET_META[a.key];
       const gc = growthClass(a.growth);
-      const growthLabel = a.growth >= 999 ? 'New' : (a.growth > 0 ? '+' + Math.round(a.growth) + '%' : (a.growth === 0 ? '—' : Math.round(a.growth) + '%'));
+      const growthLabel = a.growth === Infinity ? 'New' : (a.growth > 0 ? '+' + Math.round(a.growth) + '%' : (a.growth === 0 ? '—' : Math.round(a.growth) + '%'));
       rows += `<tr>
         <td>${m.label}</td>
         <td class="asset-num">${fmt(a.total)}</td>
@@ -510,7 +510,7 @@ function renderCity(keyOrName) {
     const [total, r25, r50] = c.assets[k];
     const p25 = total ? (r25 / total * 100) : 0;
     const p50 = total ? (r50 / total * 100) : 0;
-    const growth = r25 > 0 ? ((r50 - r25) / r25 * 100) : (r50 > 0 ? 999 : 0);
+    const growth = r25 > 0 ? ((r50 - r25) / r25 * 100) : (r50 > 0 ? Infinity : 0); // Infinity = none at risk today
     return { key: k, total, r25, r50, p25, p50, growth };
   }).sort((a, b) => b.p50 - a.p50);
 
@@ -540,7 +540,7 @@ function renderCity(keyOrName) {
         <div class="bond-message">
           <ul class="bond-message-list">
             <li><strong>${cityName}</strong> ${countyIntro} <strong>${f.disasters} federal disaster declarations</strong> since 2011.</li>
-            <li>Across the state, 93% of NJ voters want investments to reduce weather damage and <strong>77%</strong> are worried about extreme weather across party lines <a class="citation-link" href="https://www.fdu.edu/news/fdu-poll-finds-3-in-4-nj-voters-worried-about-damage-from-extreme-weather/" target="_blank" rel="noopener noreferrer">(Fairleigh Dickinson University, 2024)</a>.</li>
+            <li>Across the state, 93% of NJ voters want investments to reduce weather damage across party lines and <strong>77%</strong> are worried about extreme weather <a class="citation-link" href="https://www.fdu.edu/news/fdu-poll-finds-3-in-4-nj-voters-worried-about-damage-from-extreme-weather/" target="_blank" rel="noopener noreferrer">(Fairleigh Dickinson University, 2025)</a>.</li>
             ${c.facts && c.facts.length 
             ? c.facts.map(f => `<li>${f}</li>`).join('')
             : '<li style="color:red;">NO FACTS FOUND</li>'}
@@ -643,7 +643,7 @@ function renderCity(keyOrName) {
         <div class="fs-footer-title">Methodology &amp; Notes</div>
         <ul class="fs-footer-list">
           <li>This fact sheet draws from three Rebuild by Design research products: the <strong>Atlas of Disaster</strong> (county-level disaster declarations and FEMA obligations, 2011–2024), <strong>NJ Flood Risk = Financial Risk</strong> (parcel-level displacement and financial analysis of all 3.4 million NJ properties), and <strong>NJ Underwater: Public Infrastructure at Risk</strong> (exposure analysis of 18,959 public assets under 2025 and 2050 flood conditions).</li>
-          <li><strong>Data Sources:</strong> EPA, Fairleigh Dickinson University 2024, FEMA, NJ Office of GIS, NJDCA GIS, NJDEP, Rutgers University, Trust for Public Land, US Census 2024 Population Estimates, US EIA, USDOT.</li>
+          <li><strong>Data Sources:</strong> EPA, Fairleigh Dickinson University 2025, FEMA, NJ Office of GIS, NJDCA GIS, NJDEP, Rutgers University, Trust for Public Land, US Census 2024 Population Estimates, US EIA, USDOT.</li>
         </ul>
       </div>
       <div>
